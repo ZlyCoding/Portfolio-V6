@@ -1,12 +1,14 @@
 "use server";
 
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
   BlogDraftSchema,
+  BlogInsertSchema,
   ToggleStatusSchema,
+  StoragePathSchema,
   formatZodError,
-} from "@/lib/schemas";
+} from "@/lib/validation/schemas";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -22,7 +24,7 @@ export interface BlogPost {
   created_at: string;
 }
 
-export type BlogDraft = import("@/lib/schemas").BlogDraft;
+export type BlogDraft = import("@/lib/validation/schemas").BlogDraft;
 
 export interface ActionResult {
   success: boolean;
@@ -47,6 +49,19 @@ async function getAuthenticatedAdmin() {
     throw new Error("Forbidden: bukan admin");
 
   return { supabase, user };
+}
+
+// ── Slug Generator ─────────────────────────────────────────────────────────────
+
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, "") // buang karakter non-alphanumeric
+    .replace(/\s+/g, "-") // spasi → tanda hubung
+    .replace(/-+/g, "-") // hapus tanda hubung ganda
+    .replace(/^-|-$/g, "") // trim tanda hubung di awal/akhir
+    .slice(0, 200);
 }
 
 // ── Get Posts ──────────────────────────────────────────────────────────────────
@@ -75,24 +90,31 @@ export async function savePost(
     // Auth Check + Role Check
     const { supabase } = await getAuthenticatedAdmin();
 
-    // Zod Validation
-    const parsed = BlogDraftSchema.safeParse(payload);
-    if (!parsed.success)
-      return { success: false, error: formatZodError(parsed.error) };
-
-    const data = parsed.data;
-
-    // Database Query
     if (editingId) {
+      // UPDATE — pakai BlogDraftSchema (tanpa slug)
+      const parsed = BlogDraftSchema.safeParse(payload);
+      if (!parsed.success)
+        return { success: false, error: formatZodError(parsed.error) };
+
       const { error } = await supabase
         .from("posts")
-        .update(data)
+        .update(parsed.data)
         .eq("id", editingId);
       if (error) throw new Error(error.message);
     } else {
+      // CREATE — generate slug dari title, lalu validasi dengan BlogInsertSchema
+      const rawWithSlug = {
+        ...(payload as object),
+        slug: generateSlug((payload as { title?: string }).title ?? ""),
+      };
+
+      const parsed = BlogInsertSchema.safeParse(rawWithSlug);
+      if (!parsed.success)
+        return { success: false, error: formatZodError(parsed.error) };
+
       const { error } = await supabase
         .from("posts")
-        .insert({ ...data, status: "published" });
+        .insert({ ...parsed.data, status: "published" });
       if (error) throw new Error(error.message);
     }
 
@@ -155,15 +177,24 @@ export async function deletePost(
     if (!parsed.success)
       return { success: false, error: "ID post tidak valid." };
 
-    // Database Query
+    // Validasi imagePath jika ada
     if (imagePath) {
-      await supabase.storage.from("post-images").remove([imagePath]);
+      const parsedPath = StoragePathSchema.safeParse(imagePath);
+      if (!parsedPath.success)
+        return { success: false, error: "Path gambar tidak valid." };
     }
+
+    // Database Query — hapus post dulu
     const { error } = await supabase
       .from("posts")
       .delete()
       .eq("id", parsed.data);
     if (error) throw new Error(error.message);
+
+    // Hapus storage HANYA setelah DB delete berhasil
+    if (imagePath) {
+      await supabase.storage.from("post-images").remove([imagePath]);
+    }
 
     revalidatePath("/admin/blog");
     return { success: true };

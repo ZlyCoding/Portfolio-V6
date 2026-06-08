@@ -70,8 +70,18 @@ export const BlogDraftSchema = z.object({
   image_path: z.string().trim().nullable(),
 });
 
+/** Schema khusus untuk CREATE — menyertakan slug yang di-generate server. */
+export const BlogInsertSchema = BlogDraftSchema.extend({
+  slug: z
+    .string()
+    .trim()
+    .min(1, "Slug tidak boleh kosong.")
+    .max(200, "Slug maks 200 karakter."),
+});
+
 export type BlogDraftInput = z.input<typeof BlogDraftSchema>;
 export type BlogDraft = z.output<typeof BlogDraftSchema>;
+export type BlogInsert = z.output<typeof BlogInsertSchema>;
 
 export const PostIdSchema = z.object({
   id: z.string().uuid("ID post tidak valid."),
@@ -108,25 +118,25 @@ export const SkillsSchema = z.object({
 });
 
 export const SocialsSchema = z.object({
-  // Format: "platform|url"
   socials: z
     .array(
       z
         .string()
         .trim()
-        .regex(/^.+\|.+$/, "Format social tidak valid (platform|url)."),
+        .min(1, "URL tidak boleh kosong.")
+        .url("URL social tidak valid. Contoh: https://instagram.com/username"),
     )
     .max(20, "Maks 20 social link."),
 });
 
 export const ContactSchema = z.object({
-  // Format: "label|value"
   contact: z
     .array(
       z
         .string()
         .trim()
-        .regex(/^.+\|.+$/, "Format kontak tidak valid (label|value)."),
+        .min(1, "Kontak tidak boleh kosong.")
+        .max(200, "Kontak maks 200 karakter."),
     )
     .max(20, "Maks 20 item kontak."),
 });
@@ -139,6 +149,22 @@ export const UploadImageSchema = z.object({
     .trim()
     .min(1, "Bucket wajib diisi.")
     .regex(/^[a-z0-9-]+$/, "Nama bucket tidak valid."),
+});
+
+export const StoragePathSchema = z
+  .string()
+  .trim()
+  .min(1, "Path wajib diisi.")
+  .refine((v) => !v.startsWith("/"), "Path tidak boleh dimulai dengan /.")
+  .refine((v) => !v.includes(".."), "Path tidak valid.");
+
+export const DeleteImageSchema = z.object({
+  bucket: z
+    .string()
+    .trim()
+    .min(1, "Bucket wajib diisi.")
+    .regex(/^[a-z0-9-]+$/, "Nama bucket tidak valid."),
+  path: StoragePathSchema,
 });
 
 // ── Shared ─────────────────────────────────────────────────────────────────────

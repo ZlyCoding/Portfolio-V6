@@ -1,13 +1,14 @@
 "use server";
 
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import {
   ProjectDraftSchema,
   ProjectTypeSchema,
   ToggleStatusSchema,
+  StoragePathSchema,
   formatZodError,
-} from "@/lib/schemas";
+} from "@/lib/validation/schemas";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -25,7 +26,7 @@ export interface Project {
   created_at: string;
 }
 
-export type ProjectDraft = import("@/lib/schemas").ProjectDraft;
+export type ProjectDraft = import("@/lib/validation/schemas").ProjectDraft;
 
 export interface ActionResult {
   success: boolean;
@@ -170,15 +171,24 @@ export async function deleteProject(
     if (!parsed.success)
       return { success: false, error: "ID project tidak valid." };
 
-    // Database Query
+    // Validasi imagePath jika ada
     if (imagePath) {
-      await supabase.storage.from("project-images").remove([imagePath]);
+      const parsedPath = StoragePathSchema.safeParse(imagePath);
+      if (!parsedPath.success)
+        return { success: false, error: "Path gambar tidak valid." };
     }
+
+    // Database Query — hapus project dulu
     const { error } = await supabase
       .from("projects")
       .delete()
       .eq("id", parsed.data);
     if (error) throw new Error(error.message);
+
+    // Hapus storage HANYA setelah DB delete berhasil
+    if (imagePath) {
+      await supabase.storage.from("project-images").remove([imagePath]);
+    }
 
     revalidatePath("/admin/projects");
     return { success: true };

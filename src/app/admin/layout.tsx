@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { createServerSupabaseClient } from "@/lib/supabase-server";
-import AdminShell from "@/app/admin/_components/AdminShell";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import AdminSidebar from "@/app/admin/_components/AdminSidebar";
 import { redirect } from "next/navigation";
 
 export const metadata: Metadata = {
@@ -21,5 +21,5 @@ export default async function AdminLayout({
 
   if (!user) redirect("/auth/login");
 
-  return <AdminShell user={user}>{children}</AdminShell>;
+  return <AdminSidebar user={user}>{children}</AdminSidebar>;
 }

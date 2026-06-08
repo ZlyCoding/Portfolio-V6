@@ -1,24 +1,42 @@
 @import "tailwindcss";
 
 :root {
-  --bg-primary: #080105;
-  --bg-secondary: #0f0208;
-  --bg-card: #140309;
-  --bg-card-hover: #1c040d;
-  --crimson: #dc143c;
-  --crimson-light: #f01e4a;
-  --crimson-dim: #7a0d22;
-  --crimson-muted: rgba(220, 20, 60, 0.1);
-  --crimson-border: rgba(220, 20, 60, 0.22);
-  --text-primary: #f2e2e7;
-  --text-secondary: #a8788a;
-  --text-muted: #5e3f4d;
-  --border: rgba(220, 20, 60, 0.13);
+  --bg-primary: #080808;
+  --bg-secondary: #0f0f0f;
+  --bg-card: #141414;
+  --bg-card-hover: #1c1c1c;
+  --crimson: #8f5cbd;
+  --crimson-light: #c0a4e0;
+  --crimson-dim: #65378e;
+  --crimson-muted: rgba(143, 92, 189, 0.09);
+  --crimson-border: rgba(143, 92, 189, 0.28);
+  --text-primary: #f0f0f0;
+  --text-secondary: #888888;
+  --text-muted: #444444;
+  --border: rgba(255, 255, 255, 0.1);
   --border-subtle: rgba(255, 255, 255, 0.04);
-  --glow: 0 0 28px rgba(220, 20, 60, 0.12);
-  --glow-strong: 0 0 56px rgba(220, 20, 60, 0.22);
+  --glow: 0 0 28px rgba(143, 92, 189, 0.08);
+  --glow-strong: 0 0 56px rgba(143, 92, 189, 0.15);
   --sidebar-w: 232px;
   --header-h: 60px;
+
+  /* ── Taro Palette ───────────────────────────── */
+  --taro-50: #f5f0f9;
+  --taro-100: #ece3f5;
+  --taro-200: #d9c9ed;
+  --taro-300: #c0a4e0;
+  --taro-400: #a67dcf;
+  --taro-500: #8f5cbd;
+  --taro-600: #7a46a8;
+  --taro-700: #65378e;
+  --taro-800: #532e74;
+  --taro-900: #44275e;
+
+  --color-taro: var(--taro-500);
+  --color-taro-light: var(--taro-300);
+  --color-taro-dark: var(--taro-700);
+  --color-taro-subtle: var(--taro-100);
+  --color-taro-soft: var(--taro-200);
 }
 
 *,
@@ -153,7 +171,7 @@ body {
 }
 .field:focus {
   border-color: var(--crimson);
-  box-shadow: 0 0 0 3px rgba(220, 20, 60, 0.09);
+  box-shadow: 0 0 0 3px rgba(143, 92, 189, 0.15);
 }
 .field::placeholder {
   color: var(--text-muted);
@@ -182,7 +200,7 @@ body {
 }
 .btn-primary:hover:not(:disabled) {
   background: var(--crimson-light);
-  box-shadow: 0 0 22px rgba(220, 20, 60, 0.38);
+  box-shadow: 0 0 22px rgba(143, 92, 189, 0.45);
   transform: translateY(-1px);
 }
 .btn-primary:disabled {
@@ -242,5 +260,72 @@ body {
   }
   .sidebar-overlay.open {
     display: block;
+  }
+}
+
+/* ── No-drag images ──────────────────────────────── */
+img {
+  -webkit-user-drag: none;
+  -webkit-user-select: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Gambar di dalam link/button tetap bisa diklik */
+a img,
+button img {
+  pointer-events: auto;
+}
+
+/* ═══════════════════════════════════════════════════
+   PUBLIC PAGE STYLES
+═══════════════════════════════════════════════════ */
+
+/* Public page reset — hanya berlaku di dalam .public-page */
+.public-page {
+  font-family: var(--font-dm-sans), sans-serif;
+  background: #fff;
+  color: #111;
+  overflow-x: hidden;
+}
+
+/* Panel window hover */
+.pub-panel .pub-panel-bg {
+  transition: transform 0.6s cubic-bezier(0.22, 0.68, 0, 1.2);
+}
+.pub-panel:hover .pub-panel-bg {
+  transform: scale(1.05);
+}
+
+/* Project row hover */
+.pub-project-row {
+  transition: background 0.2s;
+}
+.pub-project-row:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+.pub-project-row:hover .pub-project-arrow {
+  background: #7c6d9e;
+  border-color: #7c6d9e;
+}
+.pub-project-row:hover .pub-project-arrow path {
+  stroke: #fff;
+}
+
+/* Scroll line animation */
+@keyframes pubScrollLine {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Mobile bottom navbar clearance */
+@media (max-width: 768px) {
+  main {
+    padding-bottom: calc(64px + env(safe-area-inset-bottom));
   }
 }

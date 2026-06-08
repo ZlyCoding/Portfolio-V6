@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import {
   FiEye,
   FiEyeOff,
@@ -10,7 +10,53 @@ import {
   FiMail,
   FiAlertCircle,
   FiLayers,
+  FiShield,
 } from "react-icons/fi";
+
+// ─── Konfigurasi Rate Limit ───────────────────────────────────────────────────
+const MAX_ATTEMPTS = 5; // maks percobaan gagal
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 menit (ms)
+const STORAGE_KEY = "login_attempts";
+
+interface AttemptData {
+  count: number;
+  lockedUntil: number | null; // timestamp (ms), null = belum dikunci
+}
+
+function getAttemptData(): AttemptData {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { count: 0, lockedUntil: null };
+    return JSON.parse(raw) as AttemptData;
+  } catch {
+    return { count: 0, lockedUntil: null };
+  }
+}
+
+function saveAttemptData(data: AttemptData) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch {
+    // silent
+  }
+}
+
+function resetAttempts() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // silent
+  }
+}
+
+// Format sisa waktu lockout ke string "MM:SS"
+function formatCountdown(ms: number): string {
+  const totalSec = Math.ceil(ms / 1000);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 function LoginForm() {
   const router = useRouter();
@@ -33,34 +79,102 @@ function LoginForm() {
   );
   const [ready, setReady] = useState(false);
 
+  // Rate limit state
+  const [attemptsLeft, setAttemptsLeft] = useState(MAX_ATTEMPTS);
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [countdown, setCountdown] = useState("");
+
+  // Baca state lockout dari localStorage saat mount
   useEffect(() => {
     setReady(true);
+    const data = getAttemptData();
+    if (data.lockedUntil && data.lockedUntil > Date.now()) {
+      setLockedUntil(data.lockedUntil);
+      setAttemptsLeft(0);
+    } else if (data.lockedUntil && data.lockedUntil <= Date.now()) {
+      // Lockout sudah expired, reset
+      resetAttempts();
+    } else {
+      setAttemptsLeft(MAX_ATTEMPTS - data.count);
+    }
   }, []);
+
+  // Countdown timer saat dikunci
+  const updateCountdown = useCallback(() => {
+    if (!lockedUntil) return;
+    const remaining = lockedUntil - Date.now();
+    if (remaining <= 0) {
+      setLockedUntil(null);
+      setAttemptsLeft(MAX_ATTEMPTS);
+      setError("");
+      resetAttempts();
+    } else {
+      setCountdown(formatCountdown(remaining));
+    }
+  }, [lockedUntil]);
+
+  useEffect(() => {
+    if (!lockedUntil) return;
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [lockedUntil, updateCountdown]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+
+    // Cek lockout
+    if (lockedUntil && lockedUntil > Date.now()) {
+      setError(`Terlalu banyak percobaan. Coba lagi dalam ${countdown}.`);
+      return;
+    }
+
     setLoading(true);
     setError("");
+
     if (!email || !password) {
       setError("Email dan password wajib diisi.");
       setLoading(false);
       return;
     }
+
     try {
       const { error: err } = await createClient().auth.signInWithPassword({
         email: email.trim().toLowerCase(),
         password,
       });
+
       if (err) {
-        setError(
-          err.message.includes("Invalid login")
-            ? "Email atau password salah."
-            : err.message.includes("Email not confirmed")
-              ? "Email belum dikonfirmasi."
-              : err.message,
-        );
+        // Hitung percobaan gagal
+        const data = getAttemptData();
+        const newCount = data.count + 1;
+
+        if (newCount >= MAX_ATTEMPTS) {
+          // Kunci!
+          const lockUntil = Date.now() + LOCKOUT_DURATION;
+          saveAttemptData({ count: newCount, lockedUntil: lockUntil });
+          setLockedUntil(lockUntil);
+          setAttemptsLeft(0);
+          setError(
+            `Terlalu banyak percobaan gagal. Akun dikunci selama 15 menit.`,
+          );
+        } else {
+          saveAttemptData({ count: newCount, lockedUntil: null });
+          const left = MAX_ATTEMPTS - newCount;
+          setAttemptsLeft(left);
+          setError(
+            err.message.includes("Invalid login")
+              ? `Email atau password salah. Sisa percobaan: ${left}.`
+              : err.message.includes("Email not confirmed")
+                ? "Email belum dikonfirmasi."
+                : err.message,
+          );
+        }
         return;
       }
+
+      // Login sukses — reset percobaan
+      resetAttempts();
       router.push(redirectTo);
       router.refresh();
     } catch {
@@ -69,6 +183,8 @@ function LoginForm() {
       setLoading(false);
     }
   }
+
+  const isLocked = !!(lockedUntil && lockedUntil > Date.now());
 
   return (
     <div
@@ -173,7 +289,49 @@ function LoginForm() {
             boxShadow: "var(--glow)",
           }}
         >
-          {error && (
+          {/* Lockout banner */}
+          {isLocked && (
+            <div
+              style={{
+                background: "rgba(220,20,60,.12)",
+                border: "1px solid rgba(220,20,60,.4)",
+                borderRadius: 10,
+                padding: "14px 16px",
+                marginBottom: 18,
+                textAlign: "center",
+              }}
+            >
+              <FiShield size={22} color="#f87171" style={{ marginBottom: 8 }} />
+              <p
+                style={{
+                  color: "#f87171",
+                  fontSize: 13,
+                  fontWeight: 600,
+                  marginBottom: 4,
+                }}
+              >
+                Akun sementara dikunci
+              </p>
+              <p style={{ color: "#fca5a5", fontSize: 12 }}>
+                Terlalu banyak percobaan gagal. Coba lagi dalam:
+              </p>
+              <p
+                style={{
+                  color: "#fff",
+                  fontSize: 22,
+                  fontWeight: 700,
+                  fontVariantNumeric: "tabular-nums",
+                  marginTop: 6,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                {countdown}
+              </p>
+            </div>
+          )}
+
+          {/* Error biasa */}
+          {error && !isLocked && (
             <div
               style={{
                 background: "rgba(220,20,60,.08)",
@@ -227,11 +385,15 @@ function LoginForm() {
                 <input
                   type="email"
                   value={email}
-                  disabled={loading}
+                  disabled={loading || isLocked}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="admin@example.com"
                   className="field"
-                  style={{ paddingLeft: 38 }}
+                  style={{
+                    paddingLeft: 38,
+                    opacity: isLocked ? 0.45 : 1,
+                    cursor: isLocked ? "not-allowed" : "text",
+                  }}
                   autoComplete="email"
                 />
               </div>
@@ -267,16 +429,22 @@ function LoginForm() {
                 <input
                   type={showPass ? "text" : "password"}
                   value={password}
-                  disabled={loading}
+                  disabled={loading || isLocked}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••••"
                   className="field"
-                  style={{ paddingLeft: 38, paddingRight: 42 }}
+                  style={{
+                    paddingLeft: 38,
+                    paddingRight: 42,
+                    opacity: isLocked ? 0.45 : 1,
+                    cursor: isLocked ? "not-allowed" : "text",
+                  }}
                   autoComplete="current-password"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPass((p) => !p)}
+                  disabled={isLocked}
                   style={{
                     position: "absolute",
                     right: 12,
@@ -284,7 +452,7 @@ function LoginForm() {
                     transform: "translateY(-50%)",
                     background: "none",
                     border: "none",
-                    cursor: "pointer",
+                    cursor: isLocked ? "not-allowed" : "pointer",
                     color: "var(--text-muted)",
                     display: "flex",
                     alignItems: "center",
@@ -298,9 +466,15 @@ function LoginForm() {
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || isLocked}
               className="btn-primary"
-              style={{ width: "100%", padding: "12px", marginTop: 4 }}
+              style={{
+                width: "100%",
+                padding: "12px",
+                marginTop: 4,
+                opacity: isLocked ? 0.5 : 1,
+                cursor: isLocked ? "not-allowed" : "pointer",
+              }}
             >
               {loading ? (
                 <>
@@ -315,6 +489,11 @@ function LoginForm() {
                     }}
                   />
                   Memproses…
+                </>
+              ) : isLocked ? (
+                <>
+                  <FiShield size={14} />
+                  Dikunci
                 </>
               ) : (
                 "Masuk"

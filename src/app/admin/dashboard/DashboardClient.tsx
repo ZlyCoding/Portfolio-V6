@@ -13,7 +13,7 @@ import {
   FiArrowUpRight,
   FiEdit3,
 } from "react-icons/fi";
-import { createClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 
 function buildStats(counts: {
   projectsTotal: number;
@@ -29,8 +29,6 @@ function buildStats(counts: {
       label: "Projects",
       value: counts.projectsTotal,
       icon: FiBriefcase,
-      color: "#DC143C",
-      bg: "rgba(220,20,60,.1)",
       trend:
         counts.projectsTotal === 0
           ? "No projects yet."
@@ -41,8 +39,6 @@ function buildStats(counts: {
       label: "Blog Posts",
       value: counts.blogTotal,
       icon: FiFileText,
-      color: "#e84c6b",
-      bg: "rgba(232,76,107,.1)",
       trend:
         counts.blogTotal === 0
           ? "No posts yet."
@@ -53,8 +49,6 @@ function buildStats(counts: {
       label: "Messages",
       value: counts.messages,
       icon: FiMail,
-      color: "#c0392b",
-      bg: "rgba(192,57,43,.1)",
       trend:
         counts.messages > 0
           ? `${counts.messages} message(s) received`
@@ -65,8 +59,6 @@ function buildStats(counts: {
       label: "Profile",
       value: 1,
       icon: FiUser,
-      color: "#a93226",
-      bg: "rgba(169,50,38,.1)",
       trend: "Manage your profile",
       href: "/admin/about",
     },
@@ -227,7 +219,7 @@ export default function DashboardClient({
           width: "100%",
         }}
       >
-        {stats.map(({ label, value, icon: Icon, color, bg, trend, href }) => (
+        {stats.map(({ label, value, icon: Icon, trend, href }) => (
           <a
             key={label}
             href={href}
@@ -248,13 +240,14 @@ export default function DashboardClient({
                     width: 36,
                     height: 36,
                     borderRadius: 9,
-                    background: bg,
+                    background: "var(--crimson-muted)",
+                    border: "1px solid var(--crimson-border)",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Icon size={17} color={color} />
+                  <Icon size={17} color="var(--crimson)" />
                 </div>
                 <FiArrowUpRight
                   size={13}

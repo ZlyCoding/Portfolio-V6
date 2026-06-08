@@ -1,12 +1,16 @@
 "use server";
 
-import { createServerSupabaseClient } from "@/lib/supabase-server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { z } from "zod";
-import { UploadImageSchema, formatZodError } from "@/lib/schemas";
+import {
+  UploadImageSchema,
+  DeleteImageSchema,
+  formatZodError,
+} from "@/lib/validation/schemas";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-const MAX_SIZE_BYTES = 3 * 1024 * 1024; // 3 MB
+const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
 const EXT_MAP: Record<string, string> = {
   "image/jpeg": "jpg",
@@ -64,10 +68,12 @@ async function getAuthenticatedAdmin() {
  *
  * @param formData  - FormData berisi `file` (File) dan `bucket` (string)
  * @param oldPath   - Path file lama yang akan dihapus (opsional)
+ * @param folder    - Subfolder di dalam bucket, misal "about" → path: "about/{filename}" (opsional)
  */
 export async function uploadImage(
   formData: FormData,
   oldPath?: string | null,
+  folder?: string | null,
 ): Promise<UploadImageResponse> {
   try {
     // Auth Check + Role Check
@@ -91,20 +97,16 @@ export async function uploadImage(
       };
     }
     if (file.size > MAX_SIZE_BYTES) {
-      return { success: false, error: "Ukuran file maksimal 3 MB." };
+      return { success: false, error: "Ukuran file maksimal 5 MB." };
     }
     if (file.size === 0) {
       return { success: false, error: "File kosong / tidak valid." };
     }
 
-    // Hapus file lama (jika ada) — tidak kritikal
-    if (oldPath) {
-      await supabase.storage.from(bucket).remove([oldPath]);
-    }
-
-    // Storage Upload
+    // Storage Upload — dilakukan SEBELUM hapus file lama
     const ext = EXT_MAP[file.type];
-    const path = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const filename = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const path = folder ? `${folder}/${filename}` : filename;
     const buffer = new Uint8Array(await file.arrayBuffer());
 
     const { error: uploadError } = await supabase.storage
@@ -112,6 +114,11 @@ export async function uploadImage(
       .upload(path, buffer, { upsert: false, contentType: file.type });
 
     if (uploadError) return { success: false, error: uploadError.message };
+
+    // Hapus file lama HANYA jika upload baru berhasil — file lama aman jika upload gagal
+    if (oldPath) {
+      await supabase.storage.from(bucket).remove([oldPath]);
+    }
 
     // Return Result
     const { data } = supabase.storage.from(bucket).getPublicUrl(path);
@@ -137,15 +144,15 @@ export async function deleteImage(
     // Auth Check + Role Check
     const { supabase } = await getAuthenticatedAdmin();
 
-    // Zod Validation
-    const parsed = UploadImageSchema.safeParse({ bucket });
+    // Zod Validation — bucket & path
+    const parsed = DeleteImageSchema.safeParse({ bucket, path });
     if (!parsed.success)
       return { success: false, error: formatZodError(parsed.error) };
 
     // Storage Delete
     const { error } = await supabase.storage
       .from(parsed.data.bucket)
-      .remove([path]);
+      .remove([parsed.data.path]);
     if (error) return { success: false, error: error.message };
 
     return { success: true };

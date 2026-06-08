@@ -3,14 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase/client";
 import {
   FiGrid,
   FiUser,
   FiBriefcase,
   FiFileText,
-  FiMail,
-  FiSettings,
   FiLogOut,
   FiLayers,
   FiMenu,
@@ -24,8 +22,6 @@ const nav = [
   { href: "/admin/about", label: "Tentang Saya", icon: FiUser },
   { href: "/admin/projects", label: "Proyek", icon: FiBriefcase },
   { href: "/admin/blog", label: "Blog", icon: FiFileText },
-  { href: "/admin/messages", label: "Pesan", icon: FiMail },
-  { href: "/admin/settings", label: "Pengaturan", icon: FiSettings },
 ];
 
 function Sidebar({
@@ -325,7 +321,7 @@ function Sidebar({
   );
 }
 
-export default function AdminShell({
+export default function AdminSidebar({
   user,
   children,
 }: {

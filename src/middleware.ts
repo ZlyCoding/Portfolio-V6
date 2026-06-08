@@ -31,9 +31,20 @@ export async function middleware(req: NextRequest) {
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  let user: Awaited<ReturnType<typeof supabase.auth.getUser>>["data"]["user"] =
+    null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    if (isAdminRoute) {
+      return NextResponse.redirect(
+        new URL("/auth/login?error=network", req.url),
+      );
+    }
+    return response;
+  }
+
   const isAdmin = user?.app_metadata?.role === "admin";
 
   if (!user && isAdminRoute) {

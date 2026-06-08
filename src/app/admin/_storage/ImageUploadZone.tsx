@@ -24,7 +24,7 @@ export default function ImageUploadZone({
   preview,
   isDragging,
   label,
-  hint = "JPG, PNG, WebP · Maks 3 MB",
+  hint = "JPG, PNG, WebP · Maks 5 MB",
   minHeight = 200,
   maxHeight = 280,
   onClickUpload,
