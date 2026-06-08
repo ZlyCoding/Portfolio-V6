@@ -6,25 +6,32 @@ export async function generateMetadata(): Promise<Metadata> {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("full_name, role, bio")
+    .select("full_name, role, bio, quote")
     .limit(1)
     .maybeSingle();
 
   const name = profile?.full_name ?? "Portfolio";
   const role = profile?.role ?? null;
-  const bio = profile?.bio ?? "Personal Portfolio";
+  const bio = profile?.bio ?? null;
+  const quote = profile?.quote ?? null;
 
   const title = role ? `${name} — ${role}` : name;
+
+  const description =
+    quote ??
+    (bio
+      ? bio.slice(0, 155).trimEnd() + (bio.length > 155 ? "…" : "")
+      : `Portfolio of ${name}`);
 
   return {
     title: {
       default: title,
       template: `%s · ${name}`,
     },
-    description: bio,
+    description,
     openGraph: {
       title,
-      description: bio,
+      description,
     },
   };
 }
