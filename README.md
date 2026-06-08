@@ -124,8 +124,9 @@ npm run start
 3. Configure the environment variables:
 
 ```env
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+SUPABASE_SERVICE_ROLE_KEY=YOUR_SUPBASE_SERVICE_KEY
 ```
 
 4. Deploy the project.
